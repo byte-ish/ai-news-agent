@@ -1,0 +1,239 @@
+# ====== File: ./generate_code_dump.py ======
+
+import os
+
+# Define the output file name
+OUTPUT_FILE = "output.txt"
+EXCLUDE_DIRS = {".venv","venv", "__pycache__", "logs", "tests", ".git", ".idea"}  # Directories to ignore
+
+def collect_python_files(directory):
+    """
+    Recursively collects all Python files (.py) in the given directory.
+    Excludes specified directories like .venv and __pycache__.
+    """
+    python_files = []
+    for root, _, files in os.walk(directory):
+        # Skip excluded directories
+        if any(excluded in root.split(os.sep) for excluded in EXCLUDE_DIRS):
+            continue
+        for file in files:
+            if file.endswith(".py"):
+                python_files.append(os.path.join(root, file))
+    return python_files
+
+def generate_code_dump(project_root):
+    """
+    Reads all Python files in the project and writes them to output.txt
+    with file paths as comments.
+    """
+    python_files = collect_python_files(project_root)
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as output:
+        for file_path in python_files:
+            try:
+                # Write the file path as a comment
+                output.write(f"# ====== File: {file_path} ======\n\n")
+                with open(file_path, "r", encoding="utf-8") as file:
+                    output.write(file.read() + "\n\n" + "="*80 + "\n\n")
+            except Exception as e:
+                print(f"⚠️ Skipping {file_path}: {e}")
+
+    print(f"✅ Code dump created successfully in {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    # Change '.' to your project root if needed
+    generate_code_dump(".")
+
+
+================================================================================
+
+# ====== File: ./app/logger.py ======
+
+import os
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Ensure logs directory exists
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Log file path
+LOG_FILE = os.path.join(LOG_DIR, "app.log")
+
+# Define log format
+LOG_FORMAT = "%(asctime)s | %(levelname)s | %(module)s | %(funcName)s | %(message)s"
+
+# Create logger
+logger = logging.getLogger("ai_news_agent")
+logger.setLevel(logging.INFO)  # Default log level
+
+# Create rotating file handler (limits file size to 5MB, keeps 5 backups)
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=5)
+file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+# Create console handler for real-time logs
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+# Add handlers to logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+logger.info("✅ Logger initialized successfully.")
+
+
+================================================================================
+
+# ====== File: ./app/main.py ======
+
+from fastapi import FastAPI, HTTPException
+from app.logger import logger
+from app.scraper import NewsScraper
+
+app = FastAPI()
+
+@app.get("/health", tags=["Health Check"])
+def health_check():
+    """
+    Health check endpoint to verify API is running.
+    """
+    logger.info("✅ Health check endpoint accessed.")
+    return {"status": "healthy"}
+
+
+@app.get("/scrape-news", tags=["Scraper"])
+def scrape_news():
+    """
+    Scrapes AI news articles and returns JSON response.
+    """
+    url = "https://news.ycombinator.com/"  # Example site (modify as needed)
+    scraper = NewsScraper(url)
+    news = scraper.fetch_news()
+
+    if not news:
+        logger.warning("⚠️ No articles were scraped.")
+        raise HTTPException(status_code=500, detail="No articles could be scraped.")
+
+    logger.info(f"📢 Returning {len(news)} scraped articles.")
+    return {"articles": news}
+
+
+# Run this API using: uvicorn app.main:app --reload
+
+
+================================================================================
+
+# ====== File: ./app/storage/database.py ======
+
+import os
+
+from sqlalchemy import Column, DateTime, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///news.db")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class NewsArticle(Base):
+    __tablename__ = "news_articles"
+    id = Column(String, primary_key=True, index=True)
+    title = Column(String, index=True)
+    url = Column(String, unique=True, index=True)
+    summary = Column(String)
+    timestamp = Column(DateTime)
+
+try:
+    Base.metadata.create_all(bind=engine)
+    logger.info("✅ Database tables created successfully.")
+except Exception as e:
+    logger.error("❌ Database initialization failed.", exc_info=True)
+
+
+
+
+================================================================================
+
+# ====== File: ./app/scrapers/scraper.py ======
+
+import requests
+from bs4 import BeautifulSoup
+from app.logger import logger
+
+class NewsScraper:
+    """
+    Scrapes news articles from a given URL.
+    Uses BeautifulSoup for HTML parsing and error handling.
+    """
+
+    def __init__(self, url: str):
+        self.url = url
+
+    def fetch_news(self):
+        """
+        Fetches news articles from the given URL.
+        Returns a list of dictionaries containing title and URL.
+        """
+        logger.info(f"🔍 Fetching news from {self.url}")
+
+        try:
+            response = requests.get(self.url, timeout=10)
+            response.raise_for_status()  # Raises HTTP errors
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = soup.find_all('h3')  # Example selector (modify based on target site)
+
+            news_list = []
+            for article in articles:
+                title = article.get_text(strip=True)
+                link_tag = article.find('a')
+                link = link_tag['href'] if link_tag else None
+
+                if title and link:
+                    news_list.append({"title": title, "url": link})
+
+            logger.info(f"✅ Successfully scraped {len(news_list)} articles.")
+            return news_list
+
+        except requests.exceptions.Timeout:
+            logger.error("❌ Request timed out while fetching news.", exc_info=True)
+        except requests.exceptions.HTTPError as http_err:
+            logger.error(f"❌ HTTP error occurred: {http_err}", exc_info=True)
+        except requests.exceptions.RequestException as req_err:
+            logger.error(f"❌ General Request error: {req_err}", exc_info=True)
+        except Exception as e:
+            logger.error("❌ An unexpected error occurred in the scraper.", exc_info=True)
+
+        return []  # Return an empty list in case of failure
+
+
+# Example test execution
+if __name__ == "__main__":
+    scraper = NewsScraper("https://news.ycombinator.com/")
+    articles = scraper.fetch_news()
+    print(articles)  # For testing
+
+
+================================================================================
+
+# ====== File: ./config/config.py ======
+
+import os
+
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///news.db")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+# Logging settings
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+
+================================================================================
+

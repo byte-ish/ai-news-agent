@@ -24,3 +24,14 @@ tomli==2.2.1
 tomlkit==0.13.2
 typing_extensions==4.12.2
 virtualenv==20.29.1
+requests
+beautifulsoup4==4.12.2
+sqlalchemy==2.0.25
+pydantic==2.5.3
+fastapi==0.110.0
+uvicorn==0.29.0
+pytest==8.0.0
+httpx==0.26.0
+psycopg2-binary==2.9.9  # PostgreSQL support (optional)
+python-dotenv==1.0.1  # For managing environment variables
+urllib3==1.26.16
