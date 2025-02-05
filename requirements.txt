@@ -1,0 +1,17 @@
+# Core dependencies
+fastapi
+uvicorn
+beautifulsoup4
+requests
+openai
+huggingface_hub
+celery
+redis
+sqlalchemy
+psycopg2
+python-dotenv
+pytest
+pre-commit
+black
+flake8
+isort

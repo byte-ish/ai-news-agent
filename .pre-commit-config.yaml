@@ -1,0 +1,41 @@
+# .pre-commit-config.yaml - Pre-commit hooks for AI News Agent
+repos:
+  # 1️⃣ Code Formatter - Black (Auto-formats Python code)
+  - repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  # 2️⃣ Linter - Flake8 (Catches Python errors, style issues, complexity issues)
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        additional_dependencies: ["flake8-bugbear", "flake8-comprehensions"]
+
+  # 3️⃣ Import Sorter - isort (Ensures imports are organized correctly)
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+
+  # 4️⃣ Security Scanner - Bandit (Checks for security vulnerabilities)
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ["-r", "app"]
+
+  # 5️⃣ Detect Secrets - Prevents committing API keys, passwords, etc.
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+
+  # 6️⃣ Check for Large Files (Prevents committing huge files by mistake)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=512"]  # Limits files to 512KB
